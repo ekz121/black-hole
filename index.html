@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Big Bang Animation with Card</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+        canvas {
+            display: block;
+        }
+        #card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            width: 300px;
+            padding: 20px;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            text-align: center;
+            opacity: 0;
+            transition: opacity 1s ease-in-out, transform 1s ease-in-out;
+            display: none;
+            cursor: pointer;
+            color: white;
+        }
+        #card.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            display: block;
+        }
+        #card a {
+            text-decoration: none;
+            color: white;
+            display: block;
+        }
+        #card img {
+            width: 100px;
+            height: 100px;
+            margin-bottom: 15px;
+            transition: transform 0.3s ease;
+        }
+        #card h2 {
+            font-size: 24px;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        #card:hover {
+            transform: translate(-50%, -50%) scale(1.05);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+        }
+        #card:hover img {
+            transform: rotate(15deg) scale(1.1);
+        }
+        #hide-btn {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        #hide-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="card">
+        <a href="https://example.com" target="_blank">
+            <img src="https://img.icons8.com/ios-filled/100/ffffff/code.png" alt="Logo Pemrograman">
+            <h2>Praktek Pemrograman Web Dasar</h2>
+        </a>
+        <button id="hide-btn">Hide</button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.7/dat.gui.min.js"></script>
+    <script>
+        // Global variables for scene, camera, renderer, controls, and simulation objects.
+        let scene, camera, renderer, controls, composer;
+        let particleSystem, particlePositions, particleVelocities;
+        let galaxySystem = null;
+        let nebula = null;
+        let particleCount = 20000;
+        let params;
+        let clock = new THREE.Clock();
+
+        // Initialize the scene and start the animation loop.
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 10000);
+            camera.position.set(0, 0, 200);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+
+            const ambientLight = new THREE.AmbientLight(0x404040, 1.5);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0xffffff, 2, 1000);
+            pointLight.position.set(0, 0, 0);
+            pointLight.castShadow = true;
+            scene.add(pointLight);
+
+            composer = new THREE.EffectComposer(renderer);
+            let renderPass = new THREE.RenderPass(scene, camera);
+            composer.addPass(renderPass);
+            let bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+            bloomPass.threshold = 0;
+            bloomPass.strength = 2;
+            bloomPass.radius = 0.5;
+            composer.addPass(bloomPass);
+
+            createParticleSystem();
+            setupGUI();
+            window.addEventListener("resize", onWindowResize, false);
+
+            // Add event listeners for hide functionality
+            const card = document.getElementById('card');
+            const hideBtn = document.getElementById('hide-btn');
+            hideBtn.addEventListener('click', (event) => {
+                event.stopPropagation(); // Prevent body click from triggering immediately
+                card.style.display = 'none';
+            });
+            document.body.addEventListener('click', (event) => {
+                if (!card.contains(event.target) && card.style.display === 'none') {
+                    card.style.display = 'block';
+                    setTimeout(() => {
+                        card.classList.add('show');
+                    }, 10);
+                }
+            });
+        }
+
+        function createParticleSystem() {
+            const geometry = new THREE.BufferGeometry();
+            particlePositions = new Float32Array(particleCount * 3);
+            particleVelocities = new Float32Array(particleCount * 3);
+
+            for (let i = 0; i < particleCount; i++) {
+                particlePositions[i * 3] = 0;
+                particlePositions[i * 3 + 1] = 0;
+                particlePositions[i * 3 + 2] = 0;
+
+                let theta = Math.random() * 2 * Math.PI;
+                let phi = Math.acos(Math.random() * 2 - 1);
+                let speed = Math.random() * 0.5 + 0.5;
+                particleVelocities[i * 3] = speed * Math.sin(phi) * Math.cos(theta);
+                particleVelocities[i * 3 + 1] = speed * Math.sin(phi) * Math.sin(theta);
+                particleVelocities[i * 3 + 2] = speed * Math.cos(phi);
+            }
+
+            geometry.setAttribute("position", new THREE.BufferAttribute(particlePositions, 3));
+            const sprite = generateSprite();
+            const material = new THREE.PointsMaterial({
+                size: 2,
+                map: sprite,
+                blending: THREE.AdditiveBlending,
+                depthTest: false,
+                transparent: true,
+                opacity: 0.8,
+                color: 0xffffff,
+            });
+
+            particleSystem = new THREE.Points(geometry, material);
+            scene.add(particleSystem);
+        }
+
+        function generateSprite() {
+            const canvas = document.createElement("canvas");
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext("2d");
+            const gradient = context.createRadialGradient(32, 32, 0, 32, 32, 32);
+            gradient.addColorStop(0, "rgba(255, 255, 255, 1)");
+            gradient.addColorStop(0.2, "rgba(255, 200, 200, 0.8)");
+            gradient.addColorStop(0.4, "rgba(200, 100, 100, 0.6)");
+            gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, 64, 64);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function setupGUI() {
+            params = {
+                expansionSpeed: 50,
+                particleSize: 2,
+                bloomStrength: 2,
+                bloomRadius: 0.5,
+                bloomThreshold: 0,
+            };
+            const gui = new dat.GUI({ width: 300 });
+            gui.add(params, "expansionSpeed", 10, 200).name("Expansion Speed");
+            gui.add(params, "particleSize", 1, 10).name("Particle Size").onChange((value) => {
+                particleSystem.material.size = value;
+            });
+            gui.add(params, "bloomStrength", 0, 5).name("Bloom Strength").onChange((value) => {
+                composer.passes[1].strength = value;
+            });
+            gui.add(params, "bloomRadius", 0, 1).name("Bloom Radius").onChange((value) => {
+                composer.passes[1].radius = value;
+            });
+            gui.add(params, "bloomThreshold", 0, 1).name("Bloom Threshold").onChange((value) => {
+                composer.passes[1].threshold = value;
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+            updateParticles(delta);
+
+            let elapsed = clock.getElapsedTime();
+            if (elapsed > 10 && !galaxySystem) createGalaxyCluster();
+            if (elapsed > 15 && !nebula) {
+                createNebula();
+                showCard();
+            }
+
+            controls.update();
+            composer.render(delta);
+        }
+
+        function updateParticles(delta) {
+            const positions = particleSystem.geometry.attributes.position.array;
+            for (let i = 0; i < particleCount; i++) {
+                let index = i * 3;
+                positions[index] += particleVelocities[index] * params.expansionSpeed * delta;
+                positions[index + 1] += particleVelocities[index + 1] * params.expansionSpeed * delta;
+                positions[index + 2] += particleVelocities[index + 2] * params.expansionSpeed * delta;
+            }
+            particleSystem.geometry.attributes.position.needsUpdate = true;
+        }
+
+        function createGalaxyCluster() {
+            const galaxyCount = 5000;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(galaxyCount * 3);
+
+            for (let i = 0; i < galaxyCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 1000;
+                positions[i * 3 + 1] = (Math.random() - 0.5) * 1000;
+                positions[i * 3 + 2] = (Math.random() - 0.5) * 1000;
+            }
+            geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+            const material = new THREE.PointsMaterial({
+                size: 1.5,
+                color: 0xaaaaaa,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                opacity: 0.5,
+                depthTest: false,
+            });
+            galaxySystem = new THREE.Points(geometry, material);
+            scene.add(galaxySystem);
+        }
+
+        function createNebula() {
+            const nebulaGeometry = new THREE.SphereGeometry(500, 32, 32);
+            const nebulaMaterial = new THREE.MeshBasicMaterial({
+                map: generateNebulaTexture(),
+                side: THREE.BackSide,
+                transparent: true,
+                opacity: 0.7,
+            });
+            nebula = new THREE.Mesh(nebulaGeometry, nebulaMaterial);
+            scene.add(nebula);
+        }
+
+        function generateNebulaTexture() {
+            const size = 512;
+            const canvas = document.createElement("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            const context = canvas.getContext("2d");
+            const gradient = context.createRadialGradient(size / 2, size / 2, size / 8, size / 2, size / 2, size / 2);
+            gradient.addColorStop(0, "rgba(50, 0, 100, 0.8)");
+            gradient.addColorStop(1, "rgba(0, 0, 0, 0.0)");
+            context.fillStyle = gradient;
+            context.fillRect(0, 0, size, size);
+            for (let i = 0; i < 1000; i++) {
+                context.fillStyle = "rgba(255,255,255," + Math.random() * 0.1 + ")";
+                const x = Math.random() * size;
+                const y = Math.random() * size;
+                context.fillRect(x, y, 1, 1);
+            }
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        function showCard() {
+            const card = document.getElementById('card');
+            card.style.display = 'block';
+            setTimeout(() => {
+                card.classList.add('show');
+            }, 10);
+        }
+    </script>
+</body>
+</html>
